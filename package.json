@@ -1,0 +1,21 @@
+{
+  "name": "devexintenal",
+  "version": "1.0.0",
+  "main": "App.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@slack/web-api": "^7.8.0",
+    "dotenv": "^16.4.7",
+    "fs": "^0.0.1-security",
+    "jira-client": "^8.2.2",
+    "jira-connector": "^3.1.0",
+    "moment": "^2.30.1",
+    "node-cron": "^3.0.3"
+  }
+}
