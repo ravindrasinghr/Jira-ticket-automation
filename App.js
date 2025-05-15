@@ -40,44 +40,70 @@ const teamMembers = [
 ];
 
 // Middleware to parse incoming JSON payloads
+
+
 app.post('/slack/events', async (req, res) => {
     const body = req.body;
 
-    if (body.type === 'url_verification') {
-        return res.status(200).send({ challenge: body.challenge });
-    }
+    // console.log("Incoming request:", body); // Log the entire request body
 
+    // if (body.event && body.event.subtype === 'bot_message') {
+    //     return res.status(200).send(); // Acknowledge but do nothing
+    // }
+
+    // const text = body.event?.text?.toLowerCase();
+    // if (body.type === 'url_verification') {
+    //     console.log("Challenge received:", body.challenge);
+    //     return res.status(200).send(body.challenge);
+    // }
+    http://ec2-43-204-215-190.ap-south-1.compute.amazonaws.com/slack/events
+
+    // ssh -i "poctest.pem" ubuntu@ec2-43-204-215-190.ap-south-1.compute.amazonaws.com
+
+
+    console.log("step 1");
     if (body.type === 'event_callback') {
         const event = body.event;
+        console.log("step 2");
 
         if (!event.text) {
+            console.log("step 3");
             return res.status(400).send('Empty text');
         }
 
-        if (event.type === 'message' && event.text.includes('<@U07LBM3N0Q1>') && event.thread_ts && event.text.includes('create ticket')) {
+        // Add check to filter out bot messages
+        if (event.subtype === 'bot_message' || event.bot_id) {
+            console.log("event 4");
+            return res.status(200).send();
+        }
+
+        if (event.type === 'message' && event.text.includes('<@U086RL4QBJM>') && event.thread_ts && event.text.includes('create ticket')) {
             const channelId = event.channel;
             const user = event.user;
             const timestamp = event.ts;
-            const threadTimestamp = event.thread_ts; // Use the thread timestamp here.
+            const threadTimestamp = event.thread_ts;
+
+            console.log("coming here");
 
             try {
-                // Fetch thread messages
-                const threadMessages = await getThread(channelId, threadTimestamp); // Use the thread_ts for fetching
-
-                // Create Jira ticket
+                const threadMessages = await getThread(channelId, threadTimestamp);
                 await createJiraTicket(channelId, user, event.text, threadMessages, timestamp, threadTimestamp);
-
                 res.status(200).send();
             } catch (error) {
+                console.error('Error processing event:', error);
                 res.status(500).send('Error processing event');
             }
         } else {
+            console.log("step 5");
             res.status(200).send();
         }
     } else {
+        console.log("step 6");
         res.status(400).send('Invalid request');
     }
 });
+
+
 
 async function getThread(channelId, threadTs) {
     try {
@@ -253,14 +279,14 @@ async function initializeBotChannels() {
 }
 
 
-initializeBotChannels()
+// initializeBotChannels()
 
 
 async function trackMentions() {
     const mentionTracker = {};
     const teamChannels = readChannelsFromFile(); // Read saved channels
 
-    const oneDayAgo = moment().subtract(24, 'hours').unix();
+    const oneDayAgo = moment().subtract(96, 'hours').unix();
 
     for (const channelId of teamChannels) {
         try {
@@ -276,7 +302,7 @@ async function trackMentions() {
                     if (!mentionTracker[userId]) mentionTracker[userId] = [];
 
                     if (message.thread_ts) {
-                        const threadLink = `https://yourworkspace.slack.com/archives/${channelId}/p${message.thread_ts.replace('.', '')}`;
+                        const threadLink = `https://gofynd.slack.com/archives/${channelId}/p${message.thread_ts.replace('.', '')}`;
                         mentionTracker[userId].push(threadLink);
                     }
                 });
@@ -372,11 +398,12 @@ const userMappings = {
 
 const teamEmails = [
     'abhishekmishra1@gofynd.com',
+    'bharathraja@gofynd.com'
 ];
 
 teamEmails.forEach(async (email) => {
     const tickets = await fetchJiraTicketsForDXBoard(email);
-    console.log(`Tickets for ${email}:`, tickets);
+    // console.log(`Tickets for ${email}:`, tickets);
 });
 
 
@@ -389,7 +416,7 @@ async function fetchJiraTicketsForDXBoard(userEmail) {
         const jiraAuth = Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
 
         // JQL to filter DX board tickets
-        const jql = `project = "DX" AND assignee = "${userEmail}"`;
+        const jql = `project = "DX" AND assignee = "${userEmail}" AND status = "In-Progress"`;
 
         const response = await axios.get(`${jiraBaseURL}/rest/api/2/search`, {
             headers: {
@@ -416,14 +443,15 @@ async function sendDXBoardSummary() {
     try {
         const teamEmails = [
             'abhishekmishra1@gofynd.com',
+            'bharathraja@gofynd.com'
         ];
 
-        let summary = '*DX Board Tickets (In Progress):*\n';
+        let summary = '*DX Board Tickets (In Progress):*\n\n';
 
         for (const email of teamEmails) {
             const tickets = await fetchJiraTicketsForDXBoard(email);
 
-            summary += `<@${email}>:\n`;
+            summary += `*@${email}:*\n`;
             if (tickets.length > 0) {
                 tickets.forEach((ticket, index) => {
                     summary += `    ${index + 1}. *${ticket.key}*: ${ticket.summary} - <${ticket.url}|Link>\n`; // Add link
@@ -445,32 +473,22 @@ async function sendDXBoardSummary() {
     }
 }
 
+// sendDXBoardSummary()
+
 
 // Schedule the task to run daily
-cron.schedule('22 14 * * *', async () => {
-    try {
-
-        console.log('Running DX board summary task...');
-        await updateChannels();         // Add new channels
-        await removeInactiveChannels(); // Remove channels with no team members
-        const mentions = await trackMentions(); // Track mentions only in active channels
-        console.log('Mention tracker after tracking:', mentions);
-        await sendMentionSummary(mentions);
-        await sendDXBoardSummary();
-    } catch (error) {
-        console.error('Error in scheduled Jira task:', error);
-    }
-});
-
-
-// cron.schedule('32 18 * * *', async () => {
-//     //console.log('Running scheduled task...');
+// cron.schedule('35 00 * * *', async () => {
 //     try {
-// const mentions = await trackMentions(); // Fetch mentions
-// //console.log('Mention tracker after tracking:', mentions);
-// await sendMentionSummary(mentions);
+
+//         console.log('Running DX board summary task...');
+//         // await updateChannels();         // Add new channels
+//         // await removeInactiveChannels(); // Remove channels with no team members
+//         const mentions = await trackMentions(); // Track mentions only in active channels
+//         console.log('Mention tracker after tracking:', mentions);
+//         await sendMentionSummary(mentions);
+//         await sendDXBoardSummary();
 //     } catch (error) {
-//         //console.error('Error in scheduled task:', error);
+//         console.error('Error in scheduled Jira task:', error);
 //     }
 // });
 
@@ -489,29 +507,57 @@ async function createJiraTicket(channelId, user, messageText, threadMessages, ti
         console.log("threadMessages and messageText", threadMessages, messageText);
         const description = await generateJiraDescription(threadMessages, messageText);
 
-        console.log("Jira description", description);
+        console.log("Jira descriptionnnn", description);
 
         const permalinkResponse = await slack.chat.getPermalink({
             channel: channelId,
             message_ts: threadTs,
         });
+        console.log("permalinkResponse", permalinkResponse);
 
         if (!permalinkResponse.ok) {
             throw new Error('Failed to fetch thread permalink');
         }
 
+        console.log("testing phase");
+
         const threadPermalink = permalinkResponse.permalink;
 
+        console.log("threadPermalink", threadPermalink);
+
         const descriptionWithLink = `${description}\n\nSlack Thread: ${threadPermalink}`;
+
+        console.log("descriptionWithLink", descriptionWithLink);
+
+        // console.log("coming here also");
+
+        // const issue = await jira.addNewIssue({
+        //     fields: {
+        //         project: { key: 'DX' },
+        //         summary: `Ticket created`,
+        //         description: descriptionWithLink,
+        //         issuetype: { name: 'Task' },
+        //     },
+        // });
+
+        // try {
+            
+        // } catch (error) {
+        //     console.error('Jira create issue error:', error.response?.data || error.message);
+        // }
 
         const issue = await jira.addNewIssue({
             fields: {
                 project: { key: 'DX' },
-                summary: `Ticket created for message from ${user}`,
+                summary: `Ticket created`,
                 description: descriptionWithLink,
                 issuetype: { name: 'Task' },
             },
         });
+        console.log('Issue created:', issue.key);
+
+
+        console.log("issueeee", issue);
 
         const jiraTicketLink = `https://${process.env.JIRA_HOST}/browse/${issue.key}`;
 

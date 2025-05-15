@@ -1,0 +1,10 @@
+app: DevEXInternal
+region: asia-south1
+entrypoint: "App.js"
+
+build:
+  builtin: dockerfile
+  ignorefile: .gitignore
+
+env:
+  PORT: '8080'
